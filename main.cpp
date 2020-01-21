@@ -15,6 +15,56 @@ const TGAColor blue = TGAColor(0,0,255,255);
 Model *model = NULL;
 const int width = 800;
 const int height = 800;
+const int depth = 255;
+Vec3f light_dir(0,0,-1);
+Vec3f eyep(-1,-1,1),eyegaze;
+Vec3f lookatp(0,0,0);
+Matrix ViewportMatrix,PerspProjMatrix,ViewMatrix;
+
+//模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向
+Matrix GetViewport(int x,int y,int w,int h){
+    Matrix m=Matrix::identity(4);
+    m[0][0]=(width)/2.0;
+    m[0][3]=(x+width-1.0)/2.0;
+    m[1][1]=(height)/2.0;
+    m[1][3]=(y+height-1.0)/2.0;
+    m[2][3]=depth/2;
+    m[2][2]=depth/2;
+    return m;
+}
+void InitTransform(){
+    Matrix ModelMatrix=Matrix::identity(4);
+    eyegaze=lookatp-eyep;
+    Vec3f u,v,w,t;
+    t=Vec3f(0,1,0);
+    for(int i=0;i<3;i++)w[i]=-eyegaze[i];
+    w.normalize();
+    u=t^w;
+    u.normalize();
+    v=w^u;v.normalize();
+    Matrix ts=Matrix::identity(4);
+    Matrix mv=Matrix::identity(4);
+    for(int i=0;i<3;i++)ts[i][3]=-eyep[i];
+    for(int i=0;i<3;i++){
+        mv[0][i]=u[i];
+        mv[1][i]=v[i];
+        mv[2][i]=w[i];
+    }
+    ViewMatrix=mv*ts;
+
+    //投影幕中心在lootatp的位置
+    PerspProjMatrix[0][0]=-1.0*(lookatp-eyep).norm();
+    PerspProjMatrix[1][1]=-1.0*(lookatp-eyep).norm();
+    PerspProjMatrix[2][2]=-1.0*(lookatp-eyep).norm()+(-100);
+    PerspProjMatrix[2][3]=(lookatp-eyep).norm()*(-100);
+    PerspProjMatrix[3][2]=1;
+    PerspProjMatrix=Matrix::identity(4);
+    PerspProjMatrix[3][2] = -1.f/(eyep-lookatp).norm();
+
+
+    cout<<PerspProjMatrix<<endl;
+    ViewportMatrix=GetViewport(0,0,width*3/4,height*3/4);
+}
 
 void DrawLine(Vec2i p0,Vec2i p1, TGAImage &image, TGAColor color){
     int x0,x1,y0,y1;
@@ -57,8 +107,20 @@ Vec3f barycentric(Vec3f A,Vec3f B,Vec3f C,Vec3f p){
     c=(float)(n*n3)/(float)(n*n);
     return Vec3f(a,b,c);
 }
-void DrawTriangle(Vec3f *pts,float *zbuffer,TGAImage &image,TGAColor color){
-    Vec2i bbox[2];
+Matrix VecToMatrix(Vec3f v){
+    Matrix m(4, 1);
+    m[0][0] = v.x;
+    m[1][0] = v.y;
+    m[2][0] = v.z;
+    m[3][0] = 1.f;
+    return m;
+}
+Vec3f MatrixToVec(Matrix m){
+    return Vec3f(m[0][0]/m[3][0], m[1][0]/m[3][0], m[2][0]/m[3][0]);
+}
+
+
+void DrawTriangle(Vec3f *pts,float *zbuffer,TGAImage &image,TGAColor color){ Vec2i bbox[2];
     bbox[0].x=min(pts[2].x,min(pts[0].x,pts[1].x));
     bbox[0].y=min(pts[2].y,min(pts[0].y,pts[1].y));
     bbox[1].x=max(pts[2].x,max(pts[0].x,pts[1].x));
@@ -78,12 +140,9 @@ void DrawTriangle(Vec3f *pts,float *zbuffer,TGAImage &image,TGAColor color){
                     image.set(x,y,color);
                 }
             }
+
         }
     }
-}
-
-Vec3f WorldToScreen(Vec3f v) {
-    return Vec3f(int((v.x+1.)*width/2.+.5), int((v.y+1.)*height/2.+.5), v.z);
 }
 int main(int argc,char ** argv){
     if (2==argc) {
@@ -96,7 +155,7 @@ int main(int argc,char ** argv){
     for(int i=0;i<width*height;i++){
         zbuffer[i]=-numeric_limits<float>::max();
     }
-    Vec3f light_dir(0,0,-1);
+    InitTransform();
     for (int i=0; i<model->nfaces(); i++) {
         std::vector<int> face = model->face(i);
         Vec3f world_coor[3];
@@ -104,7 +163,10 @@ int main(int argc,char ** argv){
         for (int j=0; j<3; j++) {
             Vec3f v=model->vert(face[j]);
             world_coor[j]=v;
-            pts[j]=WorldToScreen(v);
+            pts[j]=MatrixToVec(ViewportMatrix*PerspProjMatrix*ViewMatrix*VecToMatrix(world_coor[j]));
+            Vec3f tmp;
+            tmp=MatrixToVec(ViewMatrix*VecToMatrix(v));
+            cout<<tmp<<endl;
         }
         Vec3f n=(world_coor[2]-world_coor[0])^(world_coor[1]-world_coor[0]);
         n.normalize();
@@ -118,3 +180,4 @@ int main(int argc,char ** argv){
     delete model;
     return 0;
 }
+
