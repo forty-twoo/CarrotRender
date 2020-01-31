@@ -64,6 +64,9 @@ std::vector<int> Model::face(int idx) {
 Vec3f Model::vert(int i) {
     return verts_[i];
 }
+Vec3f Model::norm(int i) {
+    return norms_[i];
+}
 
 void Model::load_texture(std::string filename, const char *suffix, TGAImage &img) {
     std::string texfile(filename);

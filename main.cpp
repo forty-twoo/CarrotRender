@@ -15,28 +15,33 @@ const TGAColor blue = TGAColor(0,0,255,255);
 Model *model = NULL;
 const int width = 800;
 const int height = 800;
-const int depth = 255;
+const int depth = 800;
 Vec3f light_dir(0,0,-1);
-Vec3f eyep(-1,-1,1),eyegaze;
-Vec3f lookatp(0,0,0);
-Matrix ViewportMatrix,PerspProjMatrix,ViewMatrix;
+float volume_l,volume_r,volume_b,volume_t,volume_n,volume_f;
+Vec3f eyep(0.5,0,1.5),lookatp(0,0,0),eyegaze;
+Matrix ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix;
 
-//模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向
+//模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向，定义物体在z轴负向
 Matrix GetViewport(int x,int y,int w,int h){
     Matrix m=Matrix::identity(4);
     m[0][0]=(width)/2.0;
     m[0][3]=(x+width-1.0)/2.0;
-    m[1][1]=(height)/2.0;
-    m[1][3]=(y+height-1.0)/2.0;
-    m[2][3]=depth/2;
-    m[2][2]=depth/2;
+    m[1][1]=(1.f*height)/2.0;
+    m[1][3]=(y+1.f*height-1.0)/2.0;
+    m[2][2]=(1.f*depth)/2.0;
+    m[2][3]=(1.f*depth-1.0)/2.0;
     return m;
 }
 void InitTransform(){
+
+    volume_f=-10000.0,volume_n=-1.0;
+    volume_t=1.0,volume_b=-1.0;
+    volume_r=1.0,volume_l=-1.0;
+
     Matrix ModelMatrix=Matrix::identity(4);
-    eyegaze=lookatp-eyep;
     Vec3f u,v,w,t;
     t=Vec3f(0,1,0);
+    eyegaze=lookatp-eyep;
     for(int i=0;i<3;i++)w[i]=-eyegaze[i];
     w.normalize();
     u=t^w;
@@ -52,17 +57,21 @@ void InitTransform(){
     }
     ViewMatrix=mv*ts;
 
-    //投影幕中心在lootatp的位置
-    PerspProjMatrix[0][0]=-1.0*(lookatp-eyep).norm();
-    PerspProjMatrix[1][1]=-1.0*(lookatp-eyep).norm();
-    PerspProjMatrix[2][2]=-1.0*(lookatp-eyep).norm()+(-100);
-    PerspProjMatrix[2][3]=(lookatp-eyep).norm()*(-100);
+    //投影幕为volume_n
+    PerspProjMatrix[0][0]=volume_n;
+    PerspProjMatrix[1][1]=volume_n;
+    PerspProjMatrix[2][2]=volume_n+volume_f;
+    PerspProjMatrix[2][3]=(-1.0)*volume_n*volume_f;
     PerspProjMatrix[3][2]=1;
-    PerspProjMatrix=Matrix::identity(4);
-    PerspProjMatrix[3][2] = -1.f/(eyep-lookatp).norm();
 
+    OrthMatrix=Matrix::identity(4);
+    OrthMatrix[0][0]=2.0/(volume_r-volume_l);
+    OrthMatrix[1][1]=2.0/(volume_t-volume_b);
+    OrthMatrix[2][2]=2.0/(volume_n-volume_f);
+    OrthMatrix[0][3]=(-1.0)*(volume_r+volume_l)/(volume_r-volume_l);
+    OrthMatrix[1][3]=(-1.0)*(volume_t+volume_b)/(volume_t-volume_b);
+    OrthMatrix[2][3]=(-1.0)*(volume_n+volume_f/(volume_n-volume_f));
 
-    cout<<PerspProjMatrix<<endl;
     ViewportMatrix=GetViewport(0,0,width*3/4,height*3/4);
 }
 
@@ -120,7 +129,8 @@ Vec3f MatrixToVec(Matrix m){
 }
 
 
-void DrawTriangle(Vec3f *pts,float *zbuffer,TGAImage &image,TGAColor color){ Vec2i bbox[2];
+void DrawTriangle(Vec3f *pts,Vec3f *nms,float *zbuffer,TGAImage &image,TGAColor color){
+    Vec2i bbox[2];
     bbox[0].x=min(pts[2].x,min(pts[0].x,pts[1].x));
     bbox[0].y=min(pts[2].y,min(pts[0].y,pts[1].y));
     bbox[1].x=max(pts[2].x,max(pts[0].x,pts[1].x));
@@ -128,19 +138,31 @@ void DrawTriangle(Vec3f *pts,float *zbuffer,TGAImage &image,TGAColor color){ Vec
 
     for(int x=bbox[0].x;x<=bbox[1].x;x++){
         for(int y=bbox[0].y;y<=bbox[1].y;y++){
-            for(int i=0;i<3;i++){
-                Vec3f cur={(float)x,(float)y,0.0};
-                Vec3f bcoor=barycentric(pts[0],pts[1],pts[2],cur);
-                if(bcoor.x<0 || bcoor.y<0 || bcoor.z<0)continue;
-                //cout<<bcoor.x<<" "<<bcoor.y<<" "<<bcoor.z<<endl;
-                cur.z=bcoor.x*pts[2].z+bcoor.y*pts[1].z+bcoor.z*pts[0].z;
-                int id=cur.x+cur.y*width;
-                if(zbuffer[id]<cur.z){
-                    zbuffer[id]=cur.z;
-                    image.set(x,y,color);
-                }
+            Vec3f cur={(float)x,(float)y,0.0};
+            Vec3f curn;
+            Vec3f bcoor=barycentric(pts[0],pts[1],pts[2],cur);
+            if(bcoor.x<0 || bcoor.y<0 || bcoor.z<0)continue;
+            //注意这个012的顺序
+            cur.z=bcoor.x*pts[0].z+bcoor.y*pts[1].z+bcoor.z*pts[2].z;
+            int id=cur.x+cur.y*width;
+            if(id<0){
+                cerr<<"id<0"<<endl;
             }
-
+            if(zbuffer[id]<cur.z){
+                zbuffer[id]=cur.z;
+                Vec3f curn;
+                //法向量插值
+                for(int i=0;i<3;i++){
+                    curn[i]=bcoor.x*nms[0][i]+bcoor.y*nms[1][i]+bcoor.z*nms[2][i];
+                }
+                Vec3f tmp=light_dir;
+                for(int i=0;i<3;i++)tmp[i]=-tmp[i];
+                tmp.normalize();
+                curn.normalize();
+                float intensity=tmp*curn;
+                if(intensity<0)intensity=0;
+                image.set(x,y,TGAColor(color.r*intensity,color.g*intensity,color.b*intensity,255));
+            }
         }
     }
 }
@@ -157,25 +179,21 @@ int main(int argc,char ** argv){
     }
     InitTransform();
     for (int i=0; i<model->nfaces(); i++) {
-        std::vector<int> face = model->face(i);
+        vector<int> face = model->face(i);
         Vec3f world_coor[3];
         Vec3f pts[3];
+        Vec3f norm[3];
         for (int j=0; j<3; j++) {
             Vec3f v=model->vert(face[j]);
+            Vec3f n=model->norm(face[j]);
             world_coor[j]=v;
-            pts[j]=MatrixToVec(ViewportMatrix*PerspProjMatrix*ViewMatrix*VecToMatrix(world_coor[j]));
-            Vec3f tmp;
-            tmp=MatrixToVec(ViewMatrix*VecToMatrix(v));
-            cout<<tmp<<endl;
+            pts[j]=MatrixToVec(ViewportMatrix*OrthMatrix*PerspProjMatrix*ViewMatrix*VecToMatrix(v));
+            norm[j]=n;
         }
-        Vec3f n=(world_coor[2]-world_coor[0])^(world_coor[1]-world_coor[0]);
-        n.normalize();
-        float intensity=n*light_dir;
-        if(intensity>0){
-            DrawTriangle(pts,zbuffer,image,TGAColor(intensity*255, intensity*255, intensity*255, 255));
-        }
+        //norm:法向量插值不需要转化为相机坐标系，直接用世界坐标系即可
+        DrawTriangle(pts,norm,zbuffer,image,white);
     }
-    image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
+    image.flip_vertically(); 
     image.write_tga_file("my.tga");
     delete model;
     return 0;
