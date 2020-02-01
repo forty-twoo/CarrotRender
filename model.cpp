@@ -33,7 +33,7 @@ Model::Model(const char *filename) : verts_(), faces_(), norms_(), uv_() {
             std::vector<Vec3i> f;
             Vec3i tmp;
             iss >> trash;
-            while (iss >> tmp[0] >> trash >> tmp[1] >> trash >> tmp[2]) {
+            while (iss >> tmp[0]>>trash >> tmp[1] >> trash >> tmp[2] ) {
                 for (int i=0; i<3; i++) tmp[i]--; // in wavefront obj all indices start at 1, not zero
                 f.push_back(tmp);
             }
@@ -64,8 +64,10 @@ std::vector<int> Model::face(int idx) {
 Vec3f Model::vert(int i) {
     return verts_[i];
 }
-Vec3f Model::norm(int i) {
-    return norms_[i];
+Vec3f Model::norm(int iface,int nvert) {
+    int idx = faces_[iface][nvert][2];
+    return norms_[idx];
+
 }
 
 void Model::load_texture(std::string filename, const char *suffix, TGAImage &img) {
@@ -78,9 +80,11 @@ void Model::load_texture(std::string filename, const char *suffix, TGAImage &img
     }
 }
 
-TGAColor Model::diffuse(Vec2i uv) {
+
+TGAColor Model::getcolor(Vec2i uv){
     return diffusemap_.get(uv.x, uv.y);
 }
+
 
 Vec2i Model::uv(int iface, int nvert) {
     int idx = faces_[iface][nvert][1];

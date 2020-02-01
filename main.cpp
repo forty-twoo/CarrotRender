@@ -13,12 +13,12 @@ const TGAColor red = TGAColor(255,0,0,255);
 const TGAColor green = TGAColor(0,255,0,255);
 const TGAColor blue = TGAColor(0,0,255,255);
 Model *model = NULL;
-const int width = 800;
-const int height = 800;
+const int width = 1024;
+const int height = 1024;
 const int depth = 800;
 Vec3f light_dir(0,0,-1);
 float volume_l,volume_r,volume_b,volume_t,volume_n,volume_f;
-Vec3f eyep(0.5,0,1.5),lookatp(0,0,0),eyegaze;
+Vec3f eyep(1,1,1),lookatp(0,0,0),eyegaze;
 Matrix ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix;
 
 //模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向，定义物体在z轴负向
@@ -72,7 +72,7 @@ void InitTransform(){
     OrthMatrix[1][3]=(-1.0)*(volume_t+volume_b)/(volume_t-volume_b);
     OrthMatrix[2][3]=(-1.0)*(volume_n+volume_f/(volume_n-volume_f));
 
-    ViewportMatrix=GetViewport(0,0,width*3/4,height*3/4);
+    ViewportMatrix=GetViewport(0,0,width,height);
 }
 
 void DrawLine(Vec2i p0,Vec2i p1, TGAImage &image, TGAColor color){
@@ -129,7 +129,7 @@ Vec3f MatrixToVec(Matrix m){
 }
 
 
-void DrawTriangle(Vec3f *pts,Vec3f *nms,float *zbuffer,TGAImage &image,TGAColor color){
+void DrawTriangle(Vec3f *pts,Vec3f *nms,Vec2i* uv, float *zbuffer,TGAImage &image){
     Vec2i bbox[2];
     bbox[0].x=min(pts[2].x,min(pts[0].x,pts[1].x));
     bbox[0].y=min(pts[2].y,min(pts[0].y,pts[1].y));
@@ -150,11 +150,17 @@ void DrawTriangle(Vec3f *pts,Vec3f *nms,float *zbuffer,TGAImage &image,TGAColor 
             }
             if(zbuffer[id]<cur.z){
                 zbuffer[id]=cur.z;
-                Vec3f curn;
+                Vec3f curn;//法向量
+                Vec2i curuv;//纹理坐标
                 //法向量插值
                 for(int i=0;i<3;i++){
                     curn[i]=bcoor.x*nms[0][i]+bcoor.y*nms[1][i]+bcoor.z*nms[2][i];
                 }
+                //纹理坐标插值
+                curuv.x=(int)(bcoor.x*uv[0].x+bcoor.y*uv[1].x+bcoor.z*uv[2].x);
+                curuv.y=(int)(bcoor.x*uv[0].y+bcoor.y*uv[1].y+bcoor.z*uv[2].y);
+                TGAColor color=model->getcolor(curuv);
+
                 Vec3f tmp=light_dir;
                 for(int i=0;i<3;i++)tmp[i]=-tmp[i];
                 tmp.normalize();
@@ -183,19 +189,19 @@ int main(int argc,char ** argv){
         Vec3f world_coor[3];
         Vec3f pts[3];
         Vec3f norm[3];
+        Vec2i uv[3];
         for (int j=0; j<3; j++) {
             Vec3f v=model->vert(face[j]);
-            Vec3f n=model->norm(face[j]);
             world_coor[j]=v;
             pts[j]=MatrixToVec(ViewportMatrix*OrthMatrix*PerspProjMatrix*ViewMatrix*VecToMatrix(v));
-            norm[j]=n;
+            norm[j]=model->norm(i,j);
+            uv[j]=model->uv(i,j);
         }
         //norm:法向量插值不需要转化为相机坐标系，直接用世界坐标系即可
-        DrawTriangle(pts,norm,zbuffer,image,white);
+        DrawTriangle(pts,norm,uv,zbuffer,image);
     }
     image.flip_vertically(); 
     image.write_tga_file("my.tga");
     delete model;
     return 0;
 }
-
