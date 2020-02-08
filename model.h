@@ -4,12 +4,11 @@
 #include <vector>
 #include "geometry.h"
 #include "tgaimage.h"
-using namespace std;
 
 class Model {
 private:
 	std::vector<Vec3f> verts_;
-	std::vector<vector<Vec3i> > faces_; // attention, this Vec3i means vertex/uv/normal
+	std::vector<std::vector<Vec3i> > faces_; // attention, this Vec3i means vertex/uv/normal
 	std::vector<Vec3f> norms_;
 	std::vector<Vec2f> uv_;
 	TGAImage diffusemap_;
@@ -19,11 +18,12 @@ public:
 	~Model();
 	int nverts();
 	int nfaces();
+	Vec3f normal(int iface,int nvert);
 	Vec3f vert(int i);
-	TGAColor getcolor(Vec2i uv); //texture color
-	Vec2i uv(int iface, int nvert);//texture coord
-	Vec3f norm(int iface,int nvert);
-	vector<int> face(int idx);
+	Vec3f vert(int iface,int nvert);
+	Vec2f uv(int iface,int nvert);
+	TGAColor diffuse(Vec2f uv);
+	std::vector<int> face(int idx);
 };
 
 #endif //__MODEL_H__

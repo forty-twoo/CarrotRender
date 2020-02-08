@@ -2,6 +2,7 @@
 #define __GEOMETRY_H__
 
 #include <cmath>
+#include<vector>
 
 template <class t> struct Vec2 {
     t x, y;
