@@ -6,47 +6,80 @@
 #include<algorithm>
 
 #include "tgaimage.h"
-#include "model.h"
-#include "geometry.h"
 #include "my_gl.h"
+#include "model.h"
 
 using namespace std;
 const int width=800;
 const int height=800;
 
 Model *model = NULL;
-float *zbuffer=new float[width*height];
-Vec3f light_dir(0,0,-1);
-Vec3f eyep(1,1,1),lookatp(0,0,0),eyegaze,up(0,1,0);
+float *zbuffer=new float[2*width*height];
+Vector3f light_dir(0.5,0,1);
+Vector3f eyep(0.5,0.5,2),lookatp(0,0,0),eyegaze,up(0,1,0);
 
-Matrix VecToMatrix(Vec3f v){
-    Matrix m(4, 1);
-    m[0][0] = v.x;
-    m[1][0] = v.y;
-    m[2][0] = v.z;
-    m[3][0] = 1.f;
-    return m;
-}
-Vec3f MatrixToVec(Matrix m){
-    return Vec3f(m[0][0]/m[3][0], m[1][0]/m[3][0], m[2][0]/m[3][0]);
-}
 class GouraudShader : public IShader{
 public:
-    virtual Vec3f vertex(int iface,int nvert){
-        Vec3f vtx=model->vert(iface,nvert);
-        Vec3f pts;pts=MatrixToVec(ViewportMatrix*ProjMatrix*ViewMatrix*VecToMatrix(vtx));
+    Vector3f world_c[3];
+    virtual Vector3f vertex(int iface,int nvert){
+        Vector3f vtx=model->vert(iface,nvert);
+        world_c[nvert]=vtx;
+        Vector3f pts=(ViewportMatrix*ProjMatrix*ViewMatrix*vtx.homogeneous()).hnormalized();
         return pts;
     }
-    virtual bool fragment(Vec3f*nms, Vec3f bcoor,TGAColor& color){
-        Vec3f curn,tmp;
-        for(int i=0;i<3;i++)tmp[i]=-light_dir[i];
+    virtual bool fragment(Vector3f*nms, Vector2f *uv,Vector3f bcoor,TGAColor& color){
+        Vector3f curn;
+        Vector2f curuv;
+        for(int i=0;i<2;i++){
+            curuv[i]=bcoor[0]*uv[0][i]+bcoor[1]*uv[1][i]+bcoor[2]*uv[2][i];
+        }
+        for(int i=0;i<3;i++){
+            curn[i]=bcoor[0]*nms[0][i]+bcoor[1]*nms[1][i]+bcoor[2]*nms[2][i];
+        }
+        color=model->diffuse(curuv);
 
-        curn.x=bcoor.x*nms[0].x+bcoor.y*nms[1].x+bcoor.z*nms[2].x;
-        curn.y=bcoor.x*nms[0].y+bcoor.y*nms[1].y+bcoor.z*nms[2].y;
-        curn.z=bcoor.x*nms[0].z+bcoor.y*nms[1].z+bcoor.z*nms[2].z;
-        curn.normalize();tmp.normalize();
-        float intensity=std::max(curn*tmp,0.f);
-        color=TGAColor(255*intensity,255*intensity,255*intensity,255);
+        Matrix<float,2,3> TBN;
+        Matrix<float,2,3> t_vtx;
+        for(int i=0;i<3;i++){
+            t_vtx(0,i)=world_c[2][i]-world_c[0][i];
+            t_vtx(1,i)=world_c[1][i]-world_c[0][i];
+        }
+        Matrix<float,2,2> t_uv;
+        for(int i=0;i<2;i++){
+            t_uv(0,i)=uv[2][i]-uv[0][i];
+            t_uv(1,i)=uv[1][i]-uv[0][i];
+        }
+        Matrix<float,2,2> t_uv_I;
+        float c=(t_uv(0,0)*t_uv(1,1)-t_uv(0,1)*t_uv(1,0));
+        t_uv_I(0,0)=t_uv(1,1)/c;
+        t_uv_I(0,1)=-t_uv(0,1)/c;
+        t_uv_I(1,0)=-t_uv(1,0)/c;
+        t_uv_I(1,1)=t_uv(0,0)/c;
+        TBN=t_uv_I*t_vtx;
+        Vector3f T,B;
+        for(int i=0;i<3;i++)T[i]=TBN(0,i);
+        T.normalize();
+        Vector3f N=curn;
+        N.normalize();
+        B=N.cross(T);
+        B.normalize();
+        Matrix<float,3,3>TBN_;
+        for(int i=0;i<3;i++){
+            TBN_(0,i)=T[i];
+            TBN_(1,i)=B[i];
+            TBN_(2,i)=N[i];
+        }
+        
+        //cout<<TBN_<<endl<<endl;
+        Vector3f n=model->normalmap_coor(curuv);
+        //cout<<"("<<n[0]<<","<<n[1]<<","<<n[2]<<")\n";
+        n=TBN_*n;
+        Vector3f l=light_dir;
+        n.normalize();
+        l.normalize();
+        float intensity=max(0.f,l.dot(n));
+        
+        color=color*intensity;
         return false;
     }
 };
@@ -58,24 +91,28 @@ int main(int argc,char ** argv){
         model = new Model("obj/african_head.obj");
     }
     TGAImage image(width, height, TGAImage::RGB);
-    lookat(eyep,lookatp,up);
     viewport(0,0,width,height);
+    lookat(eyep,lookatp,up);
     projection();
 
-    light_dir.normalize();
     for(int i=0;i<width*height;i++){
         zbuffer[i]=-numeric_limits<float>::max();
     }
     GouraudShader myshader;
+
     for (int i=0; i<model->nfaces(); i++) {
         vector<int> face = model->face(i);
-        Vec3f screen_c[3];
-        Vec3f nms[3];
+        Vector3f screen_c[3];
+        Vector3f nms[3];
+        Vector2f uv[3];
         for (int j=0; j<3; j++) {
             screen_c[j]=myshader.vertex(i,j); 
+            //nms[j]=MatrixToVec(myshader.uniform_MIT*VecToMatrix(model->normal(i,j)));
             nms[j]=model->normal(i,j);
+            uv[j]=model->uv(i,j);
+            
         }
-        triangle(screen_c,nms,myshader,image,zbuffer);
+        triangle(screen_c,nms,uv,myshader,image,zbuffer);
     }
     image.flip_vertically(); 
     image.write_tga_file("my.tga");
