@@ -6,8 +6,6 @@
 
 Matrix4f ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix,ProjMatrix;
 
-
-
 //模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向，定义物体在z轴负向
 void viewport(int x,int y,int w,int h){
     ViewportMatrix=Matrix4f::Identity();
@@ -19,9 +17,9 @@ void viewport(int x,int y,int w,int h){
     ViewportMatrix(2,3)=(255.f)/2.0;
 }
 
-void lookat(Vector3f eyep,Vector3f lookatp, Vector3f up){
+void lookat(Vector3f camera_p,Vector3f lookat_p, Vector3f up){
     Vector3f u,v,w,eyegaze;
-    eyegaze=lookatp-eyep;
+    eyegaze=lookat_p-camera_p;
     for(int i=0;i<3;i++)w[i]=-eyegaze[i];
     w.normalize();
     u=up.cross(w);
@@ -30,7 +28,7 @@ void lookat(Vector3f eyep,Vector3f lookatp, Vector3f up){
     Matrix4f ts=Matrix4f::Identity();
     Matrix4f mv=Matrix4f::Identity();
     for(int i=0;i<3;i++){
-        ts(i,3)=-eyep[i];
+        ts(i,3)=-camera_p[i];
     }
     for(int i=0;i<3;i++){
         mv(0,i)=u(i);
@@ -43,10 +41,9 @@ void lookat(Vector3f eyep,Vector3f lookatp, Vector3f up){
 }
 void projection(){
     float volume_l,volume_r,volume_b,volume_t,volume_n,volume_f;
-    float cf=1.5;
-    volume_f=-100000.0,volume_n=-cf;
-    volume_t=cf,volume_b=-cf;
-    volume_r=cf,volume_l=-cf;
+    volume_f=-100.0,volume_n=-1.5;
+    volume_t=1,volume_b=-1;
+    volume_r=1,volume_l=-1;
     //投影幕为volume_n
     PerspProjMatrix(0,0)=volume_n;
     PerspProjMatrix(1,1)=volume_n;
@@ -62,7 +59,7 @@ void projection(){
     OrthMatrix(1,3)=(-1.0)*(volume_t+volume_b)/(volume_t-volume_b);
     OrthMatrix(2,3)=(-1.0)*(volume_n+volume_f/(volume_n-volume_f));
 
-    ProjMatrix=OrthMatrix*PerspProjMatrix;
+    ProjMatrix=OrthMatrix;
     std::cout<<"ProjMatrix: "<<std::endl;
     std::cout<<ProjMatrix<<std::endl;
 }
@@ -79,7 +76,9 @@ Vector3f barycentric(Vector3f A,Vector3f B,Vector3f C,Vector3f p){
     c=(float)(n.dot(n3))/(float)(n.dot(n));
     return Vector3f(a,b,c);
 }
-void triangle(Vector3f *pts,Vector3f *nms,Vector2f *uv,IShader &shader,TGAImage &image, float *zbuffer){
+
+
+void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer){
     Vector2f bbox[2];
     bbox[0][0]=std::min(pts[2][0],std::min(pts[0][0],pts[1][0]));
     bbox[0][1]=std::min(pts[2][1],std::min(pts[0][1],pts[1][1]));
@@ -92,6 +91,7 @@ void triangle(Vector3f *pts,Vector3f *nms,Vector2f *uv,IShader &shader,TGAImage 
             Vector3f cur={(float)x,(float)y,0.0};
             Vector3f bcoor=barycentric(pts[0],pts[1],pts[2],cur);
             if(bcoor[0]<0 || bcoor[1]<0 || bcoor[2]<0)continue;
+            //cout<<pts[0][2]<<" "<<pts[0][2]<<" "<<pts[2][2]<<endl;
             //注意这个012的顺序
             cur[2]=bcoor[0]*pts[0][2]+bcoor[1]*pts[1][2]+bcoor[2]*pts[2][2];
             int id=cur[0]+cur[1]*image.get_width();
@@ -100,12 +100,13 @@ void triangle(Vector3f *pts,Vector3f *nms,Vector2f *uv,IShader &shader,TGAImage 
                 std::cerr<<id<<std::endl;
                 return;
             }
-            if(zbuffer[id]<cur[2]){
-                bool discard=shader.fragment(nms,uv,bcoor,color);
+            if(buffer[id]<cur[2]){
+                Vector3f w_c;
+                bool discard=shader.fragment(cur,bcoor,color);
                 if(!discard){
                     image.set(x,y,color);
                 }
-                zbuffer[id]=cur[2];
+                buffer[id]=cur[2];
             }
         }
     }
