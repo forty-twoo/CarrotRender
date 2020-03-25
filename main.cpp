@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-03-23 13:51:03
+ * @LastEditTime: 2020-03-25 22:48:27
  * @Description: 主函数
  * @Source: ME
  */
@@ -25,37 +25,71 @@ const int height=800;
 Model *model = NULL;
 float *zbuffer=new float[2*width*height];
 float *shadowbuffer=new float[2*width*height];
-Vector3f light_dir(1.2,1.5,1),light_p(0.2,1,1),light_to(0,0,0);
-Vector3f eyep(0,0,1),lookatp(0,0,0),eyegaze,up(0,1,0);
+Vector3f light_p(-6,8,7),light_to(0,0,0);
+Vector3f eyep(8,10,14),lookatp(0,0,0),eyegaze,up(0,1,0);
 
 int main(int argc,char ** argv){
-    if (2==argc) {
-        model = new Model(argv[1]);
-    } else {
-        model = new Model("obj/diablo3_pose.obj");
+    if (2>argc) {
+        std::cerr << "Usage: " << argv[0] << " obj/model.obj" << std::endl;
+        return 1;
     }
     TGAImage image(width, height, TGAImage::RGB);
-    viewport(0,0,width*3/4,height*3/4);
+    TGAImage depth_image(width, height, TGAImage::RGB);
+    viewport(width,height);
     for(int i=0;i<width*height;i++){
         zbuffer[i]=-numeric_limits<float>::max();
         shadowbuffer[i]=-numeric_limits<float>::max();
     }
-
-    lookat(eyep,lookatp,up);
-    projection();
-    GouraudShader myshader;
-    for (int i=0; i<model->nfaces(); i++) {
-        vector<int> face = model->face(i);
-        Vector3f screen_c[3];
-        for (int j=0; j<3; j++) {
-            screen_c[j]=myshader.vertex(i,j); 
+    
+    Matrix4f M;
+    DepthShader depthshader;
+    lookat(light_p,light_to,up);
+    projection(0);
+    depthshader.scaleM=Matrix3f::Identity();
+    for(int i=0;i<3;i++)depthshader.scaleM(i,i)=0.5;
+    M=ViewportMatrix*ProjMatrix*ViewMatrix;
+    depthshader.uniform_M=M;
+    for(int m=1;m<argc;m++){
+        model=new Model(argv[m]);
+        for (int i=0; i<model->nfaces(); i++) {
+            vector<int> face = model->face(i);
+            Vector3f screen_c[3];
+            for (int j=0; j<3; j++) {
+                screen_c[j]=depthshader.vertex(i,j); 
+            }
+            triangle(screen_c,depthshader,depth_image,shadowbuffer);
         }
-        triangle(screen_c,myshader,image,zbuffer);
+        delete model;
+    }
+    depth_image.flip_vertically(); 
+    depth_image.write_tga_file("depth.tga");
+
+    DiffuseShader myshader;
+    lookat(eyep,lookatp,up);
+    projection(0);
+    myshader.uniform_MShadow=M*(ViewportMatrix*ProjMatrix*ViewMatrix).inverse();
+    cout<<"M:\n";
+    cout<<M<<endl;
+    cout<<"Uniform_MS:\n";
+    cout<<myshader.uniform_MShadow<<endl;
+
+    myshader.scaleM=Matrix3f::Identity();
+    for(int i=0;i<3;i++)myshader.scaleM(i,i)=0.5;
+    for(int m=1;m<argc;m++){
+        model=new Model(argv[m]);
+        for (int i=0; i<model->nfaces(); i++) {
+            vector<int> face = model->face(i);
+            Vector3f screen_c[3];
+            for (int j=0; j<3; j++) {
+                screen_c[j]=myshader.vertex(i,j); 
+            }
+            triangle(screen_c,myshader,image,zbuffer);
+        }
+        delete model;
     }
     image.flip_vertically(); 
     image.write_tga_file("my.tga");
-    delete model;
+
     show_pic("my.tga");
-    
     return 0;
 }
