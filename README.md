@@ -13,3 +13,5 @@
 - ->2月8日 重构代码，形成可编程的渲染管线结构
 
 - ->2月10日 添加Normal mapping（tangent space），存在边缘不平滑，光线计算等问题。引用Eigen矩阵库。
+
+- ->3月25日 添加shadow mapping
