@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-03-25 22:43:52
+ * @LastEditTime: 2020-04-26 10:59:51
  * @Description: shader函数 
  * @Source: ME
  */
@@ -17,20 +17,19 @@ extern float *curdepth;
 
 class DepthShader: public IShader{
 public:
-    Vector3f pv[3];
+    Vector3f pv;
     Matrix4f uniform_M;
     Matrix3f scaleM;
     virtual Vector3f vertex(int iface,int nvert){
         Vector3f vtx=model->vert(iface,nvert);
         vtx=scaleM*vtx;
         Vector3f pts=(uniform_M*vtx.homogeneous()).hnormalized();
-        
-        pv[nvert]=(ViewMatrix*vtx.homogeneous()).hnormalized();
         return pts;
     }
     virtual bool fragment(Vector3f bcoor,TGAColor &color,TGAImage&image,Vector3f curp){
         float zv;
         color=white*((6.0+zv)/6.f);
+        //cout<<curp[0]<<" , "<<curp[1]<<" , "<<curp[2]<<endl;
         return false;
     }
 };
@@ -38,6 +37,7 @@ class DiffuseShader : public IShader{
 public:
     Vector3f world_c[3];
     Vector3f varying_nms[3];
+    Matrix4f uniform_M;
     Matrix4f uniform_MShadow;
     Matrix3f scaleM;
     virtual Vector3f vertex(int iface,int nvert){
@@ -45,7 +45,7 @@ public:
         vtx=scaleM*vtx;
         world_c[nvert]=vtx;
         varying_nms[nvert]=model->normal(iface,nvert);
-        Vector3f pts=(ViewportMatrix*ProjMatrix*ViewMatrix*vtx.homogeneous()).hnormalized();
+        Vector3f pts=(uniform_M*vtx.homogeneous()).hnormalized();
         return pts;
     }
     virtual bool fragment(Vector3f bcoor,TGAColor& color,TGAImage&image,Vector3f curp){
@@ -59,16 +59,16 @@ public:
         //shadow
         curn.normalized();
         Vector3f bpts=(uniform_MShadow*curp.homogeneous()).hnormalized(); 
-        float bias=0.005;
+        float bias=0.01;
         int x,y,id;
-        for(int i=-1;i<=1;i++){
-            for(int j=-1;j<=1;j++){
+        for(int i=-2;i<=2;i++){
+            for(int j=-2;j<=2;j++){
                 x=bpts[0]+i,y=bpts[1]+j;
                 id=x*image.get_width()+y;
                 intensity+=((bpts[2])>shadowbuffer[id]-bias)?1.f:0.f;
             }
         }
-        intensity/=9.f;
+        intensity/=16.f;
         color=color*intensity*max(0.f,light.dot(curn));
         return false;
     }

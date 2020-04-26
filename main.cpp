@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-03-25 22:48:27
+ * @LastEditTime: 2020-04-26 11:04:40
  * @Description: 主函数
  * @Source: ME
  */
@@ -25,8 +25,8 @@ const int height=800;
 Model *model = NULL;
 float *zbuffer=new float[2*width*height];
 float *shadowbuffer=new float[2*width*height];
-Vector3f light_p(-6,8,7),light_to(0,0,0);
-Vector3f eyep(8,10,14),lookatp(0,0,0),eyegaze,up(0,1,0);
+Vector3f light_p(-5,8,7),light_to(0,-2,0);
+Vector3f eyep(0,8,12),lookatp(0,-2,0),eyegaze,up(0,1,0);
 
 int main(int argc,char ** argv){
     if (2>argc) {
@@ -44,7 +44,7 @@ int main(int argc,char ** argv){
     Matrix4f M;
     DepthShader depthshader;
     lookat(light_p,light_to,up);
-    projection(0);
+    projection();
     depthshader.scaleM=Matrix3f::Identity();
     for(int i=0;i<3;i++)depthshader.scaleM(i,i)=0.5;
     M=ViewportMatrix*ProjMatrix*ViewMatrix;
@@ -66,8 +66,8 @@ int main(int argc,char ** argv){
 
     DiffuseShader myshader;
     lookat(eyep,lookatp,up);
-    projection(0);
-    myshader.uniform_MShadow=M*(ViewportMatrix*ProjMatrix*ViewMatrix).inverse();
+    myshader.uniform_M=ViewportMatrix*ProjMatrix*ViewMatrix;
+    myshader.uniform_MShadow=M*myshader.uniform_M.inverse();
     cout<<"M:\n";
     cout<<M<<endl;
     cout<<"Uniform_MS:\n";

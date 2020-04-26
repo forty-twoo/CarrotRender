@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-03-23 22:04:14
+ * @LastEditTime: 2020-04-25 21:21:26
  * @Description: shader基类，一些头文件
  * @Source: ME
  */
@@ -17,12 +17,12 @@
 using namespace std;
 using namespace Eigen;
 
-extern Matrix4f ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix,ProjMatrix;
+extern Matrix4f ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix,ProjMatrix,Pers_inv;
 extern Matrix4f OrthMatrix_s;
 
 void viewport(int x,int y);
 void lookat(Vector3f eyep,Vector3f lookatp, Vector3f up);
-void projection(float coeff);
+void projection();
 
 Vector3f barycentric(Vector3f A,Vector3f B,Vector3f C,Vector3f p);
 

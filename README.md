@@ -15,3 +15,5 @@
 - ->2月10日 添加Normal mapping（tangent space），存在边缘不平滑，光线计算等问题。引用Eigen矩阵库。
 
 - ->3月25日 添加shadow mapping
+
+- ->4月26日 修改透视投影（还是觉得比例有点奇怪）

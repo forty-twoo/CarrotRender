@@ -5,7 +5,7 @@
 #include "my_gl.h"
 #include "my_shader.h"
 
-Matrix4f ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix,ProjMatrix,OrthMatrix_s;
+Matrix4f ViewportMatrix,PerspProjMatrix,ViewMatrix,OrthMatrix,ProjMatrix,OrthMatrix_s,Pers_inv;
 
 //模型默认在世界坐标系的原点处，相机坐标系原点在eyep处，相机坐标系的z轴为视线的反方向，定义物体在z轴负向
 void viewport(int x,int y){
@@ -41,19 +41,18 @@ void lookat(Vector3f cam_p,Vector3f cam_to, Vector3f up){
     std::cout<<"ViewMatrix: "<<std::endl;
     std::cout<<ViewMatrix<<std::endl;
 }
-void projection(float coeff){
+void projection(){
     float volume_l,volume_r,volume_b,volume_t,volume_n,volume_f;
-    volume_f=-1000.0,volume_n=-1.0;
-    volume_t=6,volume_b=-6;
-    volume_r=6,volume_l=-6;
+    volume_f=-20.0,volume_n=-8.0;
+    volume_t=8,volume_b=-8;
+    volume_r=8,volume_l=-8;
+
     //投影幕为volume_n
-    /*
     PerspProjMatrix(0,0)=volume_n;
     PerspProjMatrix(1,1)=volume_n;
     PerspProjMatrix(2,2)=volume_n+volume_f;
     PerspProjMatrix(2,3)=(-1.0)*volume_n*volume_f;
     PerspProjMatrix(3,2)=1;
-    */
 
     OrthMatrix=Matrix4f::Identity();
     OrthMatrix(0,0)=2.0/(volume_r-volume_l);
