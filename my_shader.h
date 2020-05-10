@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-04-26 10:59:51
+ * @LastEditTime: 2020-05-09 19:46:02
  * @Description: shader函数 
  * @Source: ME
  */
@@ -20,10 +20,14 @@ public:
     Vector3f pv;
     Matrix4f uniform_M;
     Matrix3f scaleM;
+    float w[3];
     virtual Vector3f vertex(int iface,int nvert){
         Vector3f vtx=model->vert(iface,nvert);
         vtx=scaleM*vtx;
-        Vector3f pts=(uniform_M*vtx.homogeneous()).hnormalized();
+        Vector3f pts;
+        Vector4f tmp=(uniform_M*vtx.homogeneous());
+        w[nvert]=tmp[3];
+        pts=tmp.hnormalized();
         return pts;
     }
     virtual bool fragment(Vector3f bcoor,TGAColor &color,TGAImage&image,Vector3f curp){
@@ -37,17 +41,25 @@ class DiffuseShader : public IShader{
 public:
     Vector3f world_c[3];
     Vector3f varying_nms[3];
+    float w[3];
     Matrix4f uniform_M;
     Matrix4f uniform_MShadow;
+    Matrix4f uniform_MIT;
     Matrix3f scaleM;
     virtual Vector3f vertex(int iface,int nvert){
         Vector3f vtx=model->vert(iface,nvert);
         vtx=scaleM*vtx;
         world_c[nvert]=vtx;
-        varying_nms[nvert]=model->normal(iface,nvert);
-        Vector3f pts=(uniform_M*vtx.homogeneous()).hnormalized();
+
+        varying_nms[nvert]=(uniform_MIT*model->normal(iface,nvert).homogeneous()).hnormalized();
+        
+        Vector3f pts;
+        Vector4f tmp=(uniform_M*vtx.homogeneous());
+        w[nvert]=tmp[3];
+        pts=tmp.hnormalized();
         return pts;
     }
+
     virtual bool fragment(Vector3f bcoor,TGAColor& color,TGAImage&image,Vector3f curp){
         Vector3f curn;
         for(int i=0;i<3;i++){
@@ -59,16 +71,16 @@ public:
         //shadow
         curn.normalized();
         Vector3f bpts=(uniform_MShadow*curp.homogeneous()).hnormalized(); 
-        float bias=0.01;
+        float bias=0.1;
         int x,y,id;
-        for(int i=-2;i<=2;i++){
-            for(int j=-2;j<=2;j++){
+        for(int i=-1;i<=1;i++){
+            for(int j=-1;j<=1;j++){
                 x=bpts[0]+i,y=bpts[1]+j;
                 id=x*image.get_width()+y;
                 intensity+=((bpts[2])>shadowbuffer[id]-bias)?1.f:0.f;
             }
         }
-        intensity/=16.f;
+        intensity/=9.f;
         color=color*intensity*max(0.f,light.dot(curn));
         return false;
     }
@@ -79,33 +91,40 @@ class CompleteShader : public IShader{
 public:
     Vector3f world_c[3];
     Vector2f varying_uv[3];
+    float w[3];
     Vector3f varying_nms[3];
     Matrix4f OriM;
     Matrix4f uniform_M;
     Matrix4f uniform_MIT;
     Matrix4f uniform_MShadow;
-    
-    CompleteShader(Matrix4f M, Matrix4f MIT, Matrix4f MS):uniform_M(M),uniform_MIT(MIT),uniform_MShadow(MS){}
-
 
     virtual Vector3f vertex(int iface,int nvert){
         Vector3f vtx=model->vert(iface,nvert);
         world_c[nvert]=vtx;
         varying_uv[nvert]=model->uv(iface,nvert);
-        varying_nms[nvert]=model->normal(iface,nvert);
-        Vector3f pts=(ViewportMatrix*ProjMatrix*ViewMatrix*vtx.homogeneous()).hnormalized();
+        varying_nms[nvert]=(uniform_MIT*model->normal(iface,nvert).homogeneous()).hnormalized();
+        
+        Vector3f pts;
+        Vector4f tmp=(uniform_M*vtx.homogeneous());
+        w[nvert]=tmp[3];
+        pts=tmp.hnormalized();
         return pts;
     }
     virtual bool fragment(Vector3f bcoor,TGAColor& color,TGAImage&image,Vector3f curp){
         Vector3f curn;
         Vector2f curuv;
+
         for(int i=0;i<2;i++){
-            curuv[i]=bcoor[0]*varying_uv[0][i]+bcoor[1]*varying_uv[1][i]+bcoor[2]*varying_uv[2][i];
+            curuv[i]=bcoor[0]*varying_uv[0][i]/w[0]+bcoor[1]*varying_uv[1][i]/w[1]+bcoor[2]*varying_uv[2][i]/w[2];
+            curuv[i]/=bcoor[0]/w[0]+bcoor[1]/w[1]+bcoor[2]/w[2];
         }
         for(int i=0;i<3;i++){
-            curn[i]=bcoor[0]*varying_nms[0][i]+bcoor[1]*varying_nms[1][i]+bcoor[2]*varying_nms[2][i];
+            curn[i]=bcoor[0]*varying_nms[0][i]/w[0]+bcoor[1]*varying_nms[1][i]/w[1]+bcoor[2]*varying_nms[2][i]/w[2];
+            curn[i]/=bcoor[0]/w[0]+bcoor[1]/w[1]+bcoor[2]/w[2];
         }
+        cout<<w[0]<<" "<<w[1]<<" "<<w[2]<<endl;
         color=model->diffuse(curuv);
+
 
         Matrix<float,2,3> TBN;
         Matrix<float,2,3> t_vtx;
@@ -146,7 +165,8 @@ public:
             TBN_(2,i)=N1[i];
         }
         TBN_.transpose();
-        
+        //TBN_=Matrix3f::Identity();
+
         //cout<<TBN_<<endl<<endl;
         Vector3f n=model->normalmap_coor(curuv);
         //cout<<"("<<n[0]<<","<<n[1]<<","<<n[2]<<")\n";
@@ -155,38 +175,21 @@ public:
         l=TBN_*l;
         n.normalize();
         l.normalize();
-        float intensity=1;
 
-        //shadow
-        //Vector3f ori=(OriM*curp.homogeneous()).hnormalized();
+        float intensity=0;
         Vector3f bpts=(uniform_MShadow*curp.homogeneous()).hnormalized(); 
-        int id=(bpts[0])*image.get_width()+bpts[1];
-        /*
-        for(int i=0;i<3;i++){
-            for(int j=0;j<3;j++){
-                cout<<world_c[i][j]<<" ";
+        float bias=0.01;
+        int x,y,id;
+        for(int i=-2;i<=2;i++){
+            for(int j=-2;j<=2;j++){
+                x=bpts[0]+i,y=bpts[1]+j;
+                id=x*image.get_width()+y;
+                intensity+=((bpts[2])>shadowbuffer[id]-bias)?1.f:0.f;
             }
-            cout<<endl;
         }
-        cout<<endl;
-        for(int j=0;j<3;j++){
-            cout<<ori[j]<<" ";
-        }
-        cout<<endl;
-        cout<<"--------------------"<<endl;
-        */
-        
-        cout<<curp[0]<<" "<<curp[1]<<" "<<curp[2]<<endl;
-        cout<<bpts[0]<<" "<<bpts[1]<<" "<<bpts[2]<<endl;
-        cout<<endl;
-        //cout<<shadowbuffer[id]<<" "<<bpts[2]<<endl;
-        if(shadowbuffer[id]>bpts[2]){
-            //intensity=max(0.f,(l.dot(n)-0.5f));
-            intensity=0;
-        }else{
-            intensity=max(0.f,(l.dot(n)));
-        }
-        color=color*intensity;
+        intensity/=16.f;
+        color=color*intensity*max(0.f,l.dot(n));
+
         return false;
     }
 };

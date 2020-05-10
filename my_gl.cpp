@@ -14,9 +14,6 @@ void viewport(int x,int y){
     ViewportMatrix(0,3)=(x)/2.0;
     ViewportMatrix(1,1)=(y)/2.0;
     ViewportMatrix(1,3)=(y)/2.0;
-    ViewportMatrix(2,2)=2.f/2.0;
-    ViewportMatrix(2,3)=(2.f)/2.0;
-
 }
 
 void lookat(Vector3f cam_p,Vector3f cam_to, Vector3f up){
@@ -62,7 +59,7 @@ void projection(){
     OrthMatrix(1,3)=(-1.0)*(volume_t+volume_b)/(volume_t-volume_b);
     OrthMatrix(2,3)=(-1.0)*(volume_n+volume_f/(volume_n-volume_f));
 
-    ProjMatrix=OrthMatrix;
+    ProjMatrix=OrthMatrix*PerspProjMatrix;
     std::cout<<"ProjMatrix: "<<std::endl;
     std::cout<<ProjMatrix<<std::endl;
 }
@@ -80,7 +77,7 @@ Vector3f barycentric(Vector3f A,Vector3f B,Vector3f C,Vector3f p){
     return Vector3f(a,b,c);
 }
 
-void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer){
+void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer,float *w){
     Vector2f bbox[2];
     bbox[0][0]=std::min(pts[2][0],std::min(pts[0][0],pts[1][0]));
     bbox[0][1]=std::min(pts[2][1],std::min(pts[0][1],pts[1][1]));
@@ -101,6 +98,7 @@ void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer){
                 std::cerr<<id<<std::endl;
                 return;
             }
+            
             cur[2]=bcoor[0]*pts[0][2]+bcoor[1]*pts[1][2]+bcoor[2]*pts[2][2];
             if(buffer[id]<cur[2]){
                 buffer[id]=cur[2];
@@ -109,6 +107,8 @@ void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer){
                 if(!discard){
                     image.set(x,y,color);
                 }
+            }else{
+                //image.set(x,y,TGAColor(98,91,87));
             }
         }
     }

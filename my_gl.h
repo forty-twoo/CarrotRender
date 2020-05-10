@@ -1,7 +1,7 @@
 /*
  * @Don't panic: Allons-y!
  * @Author: forty-twoo
- * @LastEditTime: 2020-04-25 21:21:26
+ * @LastEditTime: 2020-05-08 14:52:15
  * @Description: shader基类，一些头文件
  * @Source: ME
  */
@@ -33,6 +33,6 @@ public:
     virtual bool fragment(Vector3f bcoor,TGAColor &color,TGAImage&image,Vector3f curp)=0; //计算某点的颜色
 };
 
-void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer);
+void triangle(Vector3f *pts,IShader &shader,TGAImage &image, float *buffer,float *w);
 
 #endif 
